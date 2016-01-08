@@ -2,7 +2,7 @@ var streams = require('stream');
 fs = require('fs');
 
 function getSongs() {
-  fs.readdir(__dirname + '/iPhone Music', function (err, files) {
+  fs.readdir('../Music', function (err, files) {
    console.log(files)
   });
 }
@@ -10,26 +10,35 @@ function getSongs() {
 //getSongs();
 
 function getLibrary() {
+  var contents = streams.Writable();
+  var splitter = streams.Writable();
   var library_songs = [];
   var library_obj = {};
-  var contents = streams.Writable();
-  var hugeString;
+  var buffer = '';
 
   contents._write = function (chunk, enc, next) {
-    hugeString += chunk
+    buffer += chunk.toString();
+
+    // Send to Splitter if buffer ends with a complete filename, and empty the buffer
+    if (buffer.slice(-4) === '.mp3') {
+      return buffer
+      buffer = '';
+    } else {
+      buffer += chunk;
+    }
     next();
   }
 
-  var splitter = function (dict) {
-    var dict = dict.toString().split('\n');
+  splitter._write = function (buffer) {
+    var filenameArray = buffer.split('\n');
 
     // Get the lines that define a file location
-    raw_locations = dict.filter(function (val) {
+    rawLocations = filenameArray.filter(function (val) {
       return val.includes('Location')
     });
 
-    // Remove tabs, regex and split out the raw path, and remove any empty entries
-    splitstr = raw_locations.map(function (val) {
+    // Remove spaces and tabs, regex and split out the raw path, and remove any empty entries
+    splitStr = rawLocations.map(function (val) {
       return val
         .trim()
         .replace(/%20/g, ' ')
@@ -37,7 +46,7 @@ function getLibrary() {
         .filter(Boolean);
     });
 
-    splitstr.forEach(function (val) {
+    splitStr.forEach(function (val) {
       if (val[val.length - 3] !== 'podcast'
           && val[val.length - 2] !== 'Voice Memos'
           && val[val.length - 3] !== '~5') {
@@ -45,7 +54,6 @@ function getLibrary() {
         // Map to the artist, album, and track
         var artist = decodeURIComponent(val[val.length - 3]);
         var album = decodeURIComponent(escape(val[val.length - 2]));
-        console.log(val[val.length - 1]);
         var track = decodeURIComponent(val[val.length - 1]);
 
         // Create nested artist objects of album objects containing an array of tracks
@@ -63,9 +71,9 @@ function getLibrary() {
     });
   }
 
-  var stream = fs.createReadStream(__dirname + '/Library.xml', {flags: 'r', encoding: 'utf8' }).pipe(contents);
+  var stream = fs.createReadStream('Library.xml', {flags: 'r', encoding: 'utf8' }).pipe(contents).pipe(splitter);
   stream.on('finish', function() {
-    splitter(hugeString);
+    //splitter(hugeString);
     console.log(library_obj);
   });
 }
