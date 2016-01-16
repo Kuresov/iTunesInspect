@@ -1,13 +1,22 @@
-var streams = require('stream');
+streams = require('stream');
 fs = require('fs');
 
-function getSongs() {
-  fs.readdir('../Music', function (err, files) {
-   console.log(files)
+function getSongs(dir) {
+  var libraryObj = {};
+  var artists = fs.readdirSync(dir);
+
+  artists.forEach(function (artist) {
+    libraryObj[artist] = new Object;
+    var albums = fs.readdirSync(dir + '/' + artist);
+
+    albums.forEach(function (album) {
+      songlist = fs.readdirSync(dir + '/' + artist + '/' + album);
+      libraryObj[artist][album] = songlist;
+    });
   });
 }
 
-getSongs();
+getSongs('../Music');
 
 function getLibrary() {
   var parseItunesLib = streams.Transform( {objectMode: true} );
@@ -128,4 +137,4 @@ function getLibrary() {
   });
 }
 
-getLibrary();
+//getLibrary();
