@@ -16,7 +16,7 @@ function getSongs(dir) {
   });
 }
 
-getSongs('../Music');
+// getSongs('../Music');
 
 function getLibrary() {
   var parseItunesLib = streams.Transform( {objectMode: true} );
@@ -138,3 +138,53 @@ function getLibrary() {
 }
 
 //getLibrary();
+
+
+var exLib = {
+  Drake: { DrakeAlbum: ['song1', 'song2'] },
+  Bob: {
+    BobAlbum: ['song1', 'song2'],
+    BobAlbum2: ['song3', 'song4']
+  }
+}
+
+var exDisk = {
+  Bob: {
+    BobAlbum: ['song1'],
+    BobAlbum3: ['song3', 'song4']
+  },
+  Drake: { DrakeAlbum2: ['song1', 'song2'] },
+  Alex: { AlexAlbum: ['alexSong'] }
+}
+
+function compare(library, disk) {
+  var missingFromLib = new Object;
+  var missingFromDisk = new Object;
+
+  // Check for missing entries in 'disk' first
+  for (artist in library) {
+    console.log(artist);
+    if (library[artist] !== disk[artist]) {
+      for (album in library[artist]) {
+        if (library[artist][album] !== disk[artist][album]) {
+
+        }
+      }
+    }
+  }
+
+
+
+
+  // Check for missing entries in 'library'
+
+  console.log('Missing from Lib', missingFromLib);
+  console.log('Missing from Disk', missingFromDisk);
+}
+
+
+function recursiveCompare(obj1, obj2) {
+  for ()
+}
+
+compare(exLib, exDisk);
