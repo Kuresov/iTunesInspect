@@ -141,47 +141,65 @@ function getLibrary() {
 
 
 var exLib = {
-  Drake: { DrakeAlbum: ['song1', 'song2'] },
-  // Bob: {
-  //   BobAlbum: ['song1', 'song2'],
-  //   BobAlbum2: ['song3', 'song4']
-  // }
+  Drake: { DrakeAlbum: ['song4', 'song5'] },
+  Bob: {
+    BobAlbum: ['song1', 'song2'],
+    BobAlbum2: ['song3', 'song4']
+  }
 }
 
 var exDisk = {
-  // Bob: {
-  //   BobAlbum: ['song1'],
-  //   BobAlbum3: ['song3', 'song4']
-  // },
+  Bob: {
+    BobAlbum: ['song1'],
+    BobAlbum3: ['song3', 'song4']
+  },
   Drake: {
     DrakeAlbum2: ['song3', 'song4'],
     DrakeAlbum: ['song1', 'song2']
   },
-  //Alex: { AlexAlbum: ['alexSong'] }
+  Alex: { AlexAlbum: ['alexSong'] }
 }
 
 function compare(library, disk) {
   var missingFromLib = {};
   var missingFromDisk = {};
-  var libraryArtists = Object.keys(disk);
+  var diskArtists = Object.keys(disk);
 
-  libraryArtists.forEach(function(artist) {
+  diskArtists.forEach(function(artist) {
     //setProp(artist, disk[artist], library, missingFromLib);
     setProp(artist, library, disk);
   });
 
   function setProp(artist, libraryObj, diskObj) {
     // Compare the Disk object first
-    var albums = Object.keys(diskObj[artist]);
+    var diskAlbums = Object.keys(diskObj[artist]);
+    // var libraryAlbums = Object.keys(libraryObj[artist]);
 
-    albums.forEach(function(album) {
-      // If the album doesn't exist at all, push the whole thing to the missing object list
-      if (!libraryObj[artist].hasOwnProperty(album)) {
-        if (missingFromLib[artist] === undefined) { missingFromLib[artist] = new Array; }
-        missingFromLib[artist].push(album);
+    diskAlbums.forEach(function(album) {
+      // If the artist doesn't exist, push the whole thing to the 'missing' object
+      if (libraryObj[artist] === undefined) {
+        missingFromLib[artist] = diskObj[artist];
       } else {
-        // Otherwise, examine the songs in that album...
+        // If the album doesn't exist at all, push the whole thing to the missing object list
+        if (missingFromLib[artist] === undefined) { missingFromLib[artist] = new Object; }
 
+        if (!libraryObj[artist].hasOwnProperty(album)) {
+          missingFromLib[artist][album] = diskObj[artist][album];
+        } else {
+          // Otherwise, examine the songs in that album...
+          var songs = diskObj[artist][album];
+          if (missingFromLib[artist][album] === undefined) { missingFromLib[artist][album] = new Array; }
+
+          songs.forEach(function(song) {
+            if (libraryObj[artist][album].indexOf(song) == -1) {
+              missingFromLib[artist][album].push(song);
+            }
+          });
+          
+          if (missingFromLib[artist][album].length === 0) {
+            delete missingFromLib[artist][album];
+          }
+        }
       }
     });
   }
