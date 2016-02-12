@@ -142,49 +142,88 @@ function getLibrary() {
 
 var exLib = {
   Drake: { DrakeAlbum: ['song1', 'song2'] },
-  Bob: {
-    BobAlbum: ['song1', 'song2'],
-    BobAlbum2: ['song3', 'song4']
-  }
+  // Bob: {
+  //   BobAlbum: ['song1', 'song2'],
+  //   BobAlbum2: ['song3', 'song4']
+  // }
 }
 
 var exDisk = {
-  Bob: {
-    BobAlbum: ['song1'],
-    BobAlbum3: ['song3', 'song4']
+  // Bob: {
+  //   BobAlbum: ['song1'],
+  //   BobAlbum3: ['song3', 'song4']
+  // },
+  Drake: {
+    DrakeAlbum2: ['song3', 'song4'],
+    DrakeAlbum: ['song1', 'song2']
   },
-  Drake: { DrakeAlbum2: ['song1', 'song2'] },
-  Alex: { AlexAlbum: ['alexSong'] }
+  //Alex: { AlexAlbum: ['alexSong'] }
 }
 
 function compare(library, disk) {
-  var missingFromLib = new Object;
-  var missingFromDisk = new Object;
+  var missingFromLib = {};
+  var missingFromDisk = {};
+  var libraryArtists = Object.keys(disk);
 
-  // Check for missing entries in 'disk' first
-  for (artist in library) {
-    console.log(artist);
-    if (library[artist] !== disk[artist]) {
-      for (album in library[artist]) {
-        if (library[artist][album] !== disk[artist][album]) {
+  libraryArtists.forEach(function(artist) {
+    //setProp(artist, disk[artist], library, missingFromLib);
+    setProp(artist, library, disk);
+  });
 
-        }
+  function setProp(artist, libraryObj, diskObj) {
+    // Compare the Disk object first
+    var albums = Object.keys(diskObj[artist]);
+
+    albums.forEach(function(album) {
+      // If the album doesn't exist at all, push the whole thing to the missing object list
+      if (!libraryObj[artist].hasOwnProperty(album)) {
+        if (missingFromLib[artist] === undefined) { missingFromLib[artist] = new Array; }
+        missingFromLib[artist].push(album);
+      } else {
+        // Otherwise, examine the songs in that album...
+
       }
-    }
+    });
   }
 
-
-
-
-  // Check for missing entries in 'library'
-
   console.log('Missing from Lib', missingFromLib);
-  console.log('Missing from Disk', missingFromDisk);
-}
+  // console.log('Missing from Disk', missingFromDisk);
 
 
-function recursiveCompare(obj1, obj2) {
-  for ()
+
+
+  //function setProp(path, value, compareObj, memo, index) {
+  //  var memo = memo || {};
+  //  var index = index || 0;
+  //  if (!Array.isArray(path)) { path = path.split('/'); };
+  //  var nextChild = path[0];
+  //  console.log('---');
+  //  console.log('memo', memo);
+  //  console.log('path', path);
+  //  console.log('value', value);
+
+  //  // if object has path[0],
+  //  //   recurse to the next child (the first level of value)
+
+  //  // if object does not have path[0],
+  //  //   create it (new Object)
+  //  //   recurse to next child (the first level of value)
+
+  //  console.log('Compare has path[index]:', compareObj.hasOwnProperty(path[index]));
+
+  //  if (compareObj.hasOwnProperty(path[index])) {
+  //    // We have the property, but attributes may be mixed. Recurse further.
+  //    console.log('recursing');
+  //    setProp(path, value, compareObj[nextChild], memo, index + 1);
+  //    return;
+  //  } else {
+  //    console.log("Adding all attributes");
+  //    // We do not have the property, or its attributes. Add them all to the memo.
+  //    memo[path[index]] = value;
+  //    return;
+  //  }
+  //}
+  
 }
 
 compare(exLib, exDisk);
