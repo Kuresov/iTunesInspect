@@ -35,7 +35,8 @@ function getLibrary() {
     return Math.ceil(total / (arr.length));
   }
 
-  // Remove spaces and tabs, regex and split out the raw path, and remove any empty entries for strings from the Library file.
+  // Remove spaces and tabs, regex and split out the raw path, and remove any empty
+  // entries for strings from the Library file.
   function libStringToArray(string) {
     return string.trim()
       .replace(/%20/g, ' ')
@@ -46,7 +47,9 @@ function getLibrary() {
   parseItunesLib._transform = function (chunk, enc, next) {
     var filenameArray = chunk.toString().split('\n');
 
-    // If the new array has a filename in the first line, and the last buffer entry has a partial filename, we want to pull the rest of the string out and concat it into the buffer to have a complete record.
+    // If the new array has a filename in the first line, and the last buffer entry
+    // has a partial filename, we want to pull the rest of the string out and concat
+    // it into the buffer to have a complete record.
     var lastBufferRecord = buffer[buffer.length - 1];
     if (buffer.length > 0
         && filenameArray[0].indexOf('.mp3') > -1
@@ -82,13 +85,15 @@ function getLibrary() {
       recordLen = averageArrayLength(splitStr);
       var splitStrLen = splitStr.length;
 
-      // Check if the last filename array is shorter than the rest (and therefore, has been cut off). If so, append this to the buffer variable, and move on.
+      // Check if the last filename array is shorter than the rest (and therefore,
+      // has been cut off). If so, append this to the buffer variable, and move on.
       if (splitStr[splitStrLen - 1].length !== recordLen
           || splitStr[splitStrLen - 1][recordLen - 1].slice(-4) !== '.mp3') {
         buffer = buffer.concat(splitStr);
       }
 
-      // Send to buildUserLib if buffer ends with a complete filename, and empty the buffer. Otherwise, send it to the buffer variable, and get the next chunk.
+      // Send to buildUserLib if buffer ends with a complete filename, and empty
+      // the buffer. Otherwise, send it to the buffer variable, and get the next chunk.
       if (splitStr[splitStrLen - 1].length === recordLen
           && splitStr[splitStrLen - 1][recordLen - 1].slice(-4) === '.mp3') {
         this.push(splitStr);
@@ -140,108 +145,108 @@ function getLibrary() {
 //getLibrary();
 
 
+//compare
 var exLib = {
-  Drake: { DrakeAlbum: ['song4', 'song5'] },
+  Drake: { DrakeAlbum: ['song5', 'song6'] },
   Bob: {
     BobAlbum: ['song1', 'song2'],
     BobAlbum2: ['song3', 'song4']
   }
 }
 
+//base
 var exDisk = {
-  Bob: {
-    BobAlbum: ['song1'],
-    BobAlbum3: ['song3', 'song4']
-  },
   Drake: {
-    DrakeAlbum2: ['song3', 'song4'],
-    DrakeAlbum: ['song1', 'song2']
+    DrakeAlbum: ['song1', 'song2'],
+    DrakeAlbum2: ['song3', 'song4']
+  },
+  Bob: {
+    BobAlbum: ['song1', 'song5'],
+    BobAlbum3: ['song3', 'song4']
   },
   Alex: { AlexAlbum: ['alexSong'] }
 }
 
-function compare(library, disk) {
+function buildMissingItems(library, disk) {
   var missingFromLib = {};
   var missingFromDisk = {};
   var diskArtists = Object.keys(disk);
 
-  diskArtists.forEach(function(artist) {
-    //setProp(artist, disk[artist], library, missingFromLib);
-    setProp(artist, library, disk);
-  });
+  function compare(baseObj, compareObj, path) {
+    path = path || [];
+    var baseObjects;
 
-  function setProp(artist, libraryObj, diskObj) {
-    // Compare the Disk object first
-    var diskAlbums = Object.keys(diskObj[artist]);
-    // var libraryAlbums = Object.keys(libraryObj[artist]);
+    if (baseObj.constructor === Object) {
+      baseObjects = Object.keys(baseObj);
 
-    diskAlbums.forEach(function(album) {
-      // If the artist doesn't exist, push the whole thing to the 'missing' object
-      if (libraryObj[artist] === undefined) {
-        missingFromLib[artist] = diskObj[artist];
-      } else {
-        // If the album doesn't exist at all, push the whole thing to the missing object list
-        if (missingFromLib[artist] === undefined) { missingFromLib[artist] = new Object; }
+      baseObjects.forEach(function(object) {
+        if (compareObj[object] === undefined) {
 
-        if (!libraryObj[artist].hasOwnProperty(album)) {
-          missingFromLib[artist][album] = diskObj[artist][album];
-        } else {
-          // Otherwise, examine the songs in that album...
-          var songs = diskObj[artist][album];
-          if (missingFromLib[artist][album] === undefined) { missingFromLib[artist][album] = new Array; }
+          buildDeepObj(missingFromLib, path.concat([object]));
 
-          songs.forEach(function(song) {
-            if (libraryObj[artist][album].indexOf(song) == -1) {
-              missingFromLib[artist][album].push(song);
-            }
+          getPathString(path.concat([object]), function(pathString) {
+            eval('missingFromLib' + pathString + '= baseObj[object]');
           });
-          
-          if (missingFromLib[artist][album].length === 0) {
-            delete missingFromLib[artist][album];
-          }
+        } else {
+          // The object is present, so check items within it
+          compare(baseObj[object], compareObj[object], path.concat([object]));
         }
+      });
+    } else {
+      var baseArray = baseObj;
+      var compareArray = compareObj;
+      var returnArray = [];
+      var arraysEqual = true;
+
+      baseArray.forEach(function(val) {
+        if (compareArray.indexOf(val) === -1) {
+          arraysEqual = false;
+          returnArray.push(val)
+        }
+      });
+
+      if (arraysEqual === false) {
+        buildDeepObj(missingFromLib, path);
+        getPathString(path, function(pathString) {
+          eval('missingFromLib' + pathString + '= returnArray');
+        });
       }
-    });
+    }
   }
 
+  // Build an object based on the path array given. If we're on the last
+  // item, create an array instead (for this use-case). I would like to
+  // find a solution that doesn't involve the use of eval().
+  function buildDeepObj(obj, path, next) {
+    var next = next || 0;
+    var current = '';
+
+    for (i = 0; i <= next; i++) {
+      current = current.concat('["' + path[i] + '"]');
+    }
+
+    var currentLocation = 'missingFromLib' + current;
+
+    if (next === path.length - 1) {
+      eval(currentLocation + '= []');
+    } else {
+      if (eval(currentLocation) === undefined) {
+        eval(currentLocation + '= {}');
+      }
+      next++;
+      buildDeepObj(obj, path, next);
+    }
+  }
+
+  function getPathString(pathArr, callback) {
+    var pathString = '["' + pathArr.join('"]["') + '"]';
+    callback(pathString);
+  }
+
+  compare(exDisk, exLib);
+
   console.log('Missing from Lib', missingFromLib);
-  // console.log('Missing from Disk', missingFromDisk);
-
-
-
-
-  //function setProp(path, value, compareObj, memo, index) {
-  //  var memo = memo || {};
-  //  var index = index || 0;
-  //  if (!Array.isArray(path)) { path = path.split('/'); };
-  //  var nextChild = path[0];
-  //  console.log('---');
-  //  console.log('memo', memo);
-  //  console.log('path', path);
-  //  console.log('value', value);
-
-  //  // if object has path[0],
-  //  //   recurse to the next child (the first level of value)
-
-  //  // if object does not have path[0],
-  //  //   create it (new Object)
-  //  //   recurse to next child (the first level of value)
-
-  //  console.log('Compare has path[index]:', compareObj.hasOwnProperty(path[index]));
-
-  //  if (compareObj.hasOwnProperty(path[index])) {
-  //    // We have the property, but attributes may be mixed. Recurse further.
-  //    console.log('recursing');
-  //    setProp(path, value, compareObj[nextChild], memo, index + 1);
-  //    return;
-  //  } else {
-  //    console.log("Adding all attributes");
-  //    // We do not have the property, or its attributes. Add them all to the memo.
-  //    memo[path[index]] = value;
-  //    return;
-  //  }
-  //}
-  
 }
 
-compare(exLib, exDisk);
+buildMissingItems(exLib, exDisk);
+
