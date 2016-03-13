@@ -1,11 +1,52 @@
 streams = require('stream');
 fs = require('fs');
 
+// Compute the length that each filename array should be, to test if the stream chunk cuts it off.
+function averageArrayLength(arr) {
+  var total = 0;
+  arr.forEach((record, i) => {
+    total += record.length;
+  });
+  return Math.ceil(total / (arr.length));
+}
+
+// Remove spaces and tabs, regex and split out the raw path, and remove any empty
+// entries for strings from the Library file.
+function libStringToArray(string) {
+  return string.trim()
+    .replace(/%20/g, ' ') // Add proper whitespacing
+    .replace(/&#(\d{0,4});/g, function(fullStr, str) { return String.fromCharCode(str); }) // Fix HTML codes
+    .split(/<\w+>|<\/\w+>|<\w+|\w+>|\//g) // Remove '<thing>', '</thing>' blocks, and partials
+    .filter(Boolean); // Remove anything with a length of 0
+}
+
+// Simple check to see if a filename ends with a '.' + 3 characters
+function filenameCheck(string) {
+  return /\.([A-Za-z0-9]{3})$/.test(string.slice(-4));
+}
+
+// Currently not implemented. Would like to delete any items that are not of the type we're 
+// looking for here, rather than in 'if' statments of the the other functions
+function sanitizeBuffer(arr) {
+  newArr = [];
+
+  arr.forEach(function(item, i) {
+    if (item.indexOf('Voice Memos') === -1) {
+      newArr.push(arr[i]);
+    } else {
+      console.log('memo found');
+    }
+  });
+
+  return newArr;
+}
+
 function getSongs(dir) {
   var libraryObj = {};
   var artists = fs.readdirSync(dir);
 
   artists.forEach(function (artist) {
+
     libraryObj[artist] = new Object;
     var albums = fs.readdirSync(dir + '/' + artist);
 
@@ -14,60 +55,61 @@ function getSongs(dir) {
       libraryObj[artist][album] = songlist;
     });
   });
+  return libraryObj;
 }
-
-// getSongs('../Music');
 
 function getLibrary() {
   var parseItunesLib = streams.Transform( {objectMode: true} );
-  var buildUserLib = streams.Writable( {objectMode:true} );
-  var library_songs = [];
-  var library_obj = {};
+  var buildUserLib = streams.Writable( {objectMode: true} );
+  var librarySongs = [];
+  var libraryObj = {};
   var buffer = [];
   var recordLen = 0;
-
-  // Compute the length that each filename array should be, to test if the stream chunk cuts it off.
-  function averageArrayLength(arr) {
-    var total = 0;
-    arr.forEach((record, i) => {
-      total += record.length;
-    });
-    return Math.ceil(total / (arr.length));
-  }
-
-  // Remove spaces and tabs, regex and split out the raw path, and remove any empty
-  // entries for strings from the Library file.
-  function libStringToArray(string) {
-    return string.trim()
-      .replace(/%20/g, ' ')
-      .split(/<\w+>|<\/\w+>|\//g)
-      .filter(Boolean);
-  }
 
   parseItunesLib._transform = function (chunk, enc, next) {
     var filenameArray = chunk.toString().split('\n');
 
-    // If the new array has a filename in the first line, and the last buffer entry
-    // has a partial filename, we want to pull the rest of the string out and concat
-    // it into the buffer to have a complete record.
+    // If the new array has a partial filename in the first line, and the last buffer
+    // entry has a partial filename, we want to pull the rest of the string out and
+    // concat it into the buffer to have a complete record.
     var lastBufferRecord = buffer[buffer.length - 1];
-    if (buffer.length > 0
-        && filenameArray[0].indexOf('.mp3') > -1
-        && lastBufferRecord[lastBufferRecord.length - 1].indexOf('.mp3') === -1
-        && buffer[buffer.length - 1].length === recordLen) {
-      var filenameParts = libStringToArray(filenameArray[0]);
-      var partialFilename = filenameParts.filter( (val) => {
-        return val.includes('.mp3');
+    if (buffer.length > 0 &&
+        !filenameCheck(filenameArray[0]) &&
+        !filenameCheck(lastBufferRecord[lastBufferRecord.length - 1]) &&
+        buffer[buffer.length - 1].length === recordLen) {
+
+      var dirtyFilename = buffer[buffer.length - 1][recordLen - 1].concat(filenameArray[0]);
+      var cleanFilename = libStringToArray(dirtyFilename).filter(function(val) {
+        return filenameCheck(val);
       });
 
-      buffer[buffer.length - 1][recordLen - 1] = buffer[buffer.length - 1][recordLen - 1].concat(partialFilename);
-    }
+      if (cleanFilename.length === 0) { return; };
 
-    // If the last buffer array has too few fields, append the first array of the new chunk to it.
-    if (buffer.length > 0
-        && buffer[buffer.length - 1].length < recordLen) {
-      var remainingFields = libStringToArray(filenameArray[0]);
-      buffer[buffer.length - 1] = buffer[buffer.length - 1].concat(remainingFields);
+      buffer[buffer.length - 1][recordLen - 1] = cleanFilename.join('');
+    };
+
+    // If the last buffer array has too few fields, append fields from the new
+    // array until it's the correct length
+    //
+    // Problem- we can't tell if the last array is actually complete or not, so sometimes we're 
+    // appending the end of an artist name as the next field.
+    if (buffer.length > 0 &&
+      buffer[buffer.length - 1].length < recordLen - 1) {
+
+      var nextFields = libStringToArray(filenameArray[0]);
+
+      //if (buffer[buffer.length - 1].length < recordLen - 1) {
+      //}
+
+      if (buffer[buffer.length - 1].length + nextFields.length > recordLen) {
+        // This looks disgusting. I'm sure there's a way to pass
+        // this by reference or some equivalent.
+        var lastBufferSubArrayItem = buffer[buffer.length - 1][buffer[buffer.length - 1].length - 1];
+
+        buffer[buffer.length - 1][buffer[buffer.length - 1].length - 1] = lastBufferSubArrayItem.concat(nextFields.shift());
+      }
+
+      buffer[buffer.length - 1] = buffer[buffer.length - 1].concat(nextFields);
     }
 
     // Get only the lines that define a file location
@@ -77,27 +119,38 @@ function getLibrary() {
 
     // Ensure that rawLocations actually includes data, as it's possible for it to be empty.
     if (rawLocations.length > 0) {
-      var splitStr = rawLocations.map(function (val) {
+      var filePathArray = rawLocations.map(function (val) {
         return libStringToArray(val)
       });
 
-      // Get number of parts for a splitStr record (file path plus file name)
-      recordLen = averageArrayLength(splitStr);
-      var splitStrLen = splitStr.length;
+      // Get number of parts for a filePathArray record (file path plus file name)
+      recordLen = averageArrayLength(filePathArray);
+      var filePathArrayLen = filePathArray.length;
 
       // Check if the last filename array is shorter than the rest (and therefore,
-      // has been cut off). If so, append this to the buffer variable, and move on.
-      if (splitStr[splitStrLen - 1].length !== recordLen
-          || splitStr[splitStrLen - 1][recordLen - 1].slice(-4) !== '.mp3') {
-        buffer = buffer.concat(splitStr);
+      // has been cut off), or the last entry isn't a filename. If so, append
+      // this to the buffer variable.
+      if (filePathArray[filePathArrayLen - 1].length !== recordLen
+          || !filenameCheck(filePathArray[filePathArrayLen - 1][recordLen - 1])) {
+
+        buffer = buffer.concat(filePathArray);
       }
 
       // Send to buildUserLib if buffer ends with a complete filename, and empty
       // the buffer. Otherwise, send it to the buffer variable, and get the next chunk.
-      if (splitStr[splitStrLen - 1].length === recordLen
-          && splitStr[splitStrLen - 1][recordLen - 1].slice(-4) === '.mp3') {
-        this.push(splitStr);
-        buffer = [];
+      if (filePathArray[filePathArrayLen - 1].length === recordLen
+          && filenameCheck(filePathArray[filePathArrayLen - 1][recordLen - 1])) {
+
+        if (buffer.length > 0
+            && buffer[buffer.length - 1].length === recordLen
+            && filenameCheck(buffer[buffer.length - 1][recordLen - 1])) {
+
+          // We aren't getting to this point, so the last filename isn't being completed
+          filePathArray = filePathArray.concat(buffer);
+          buffer = [];
+        }
+
+        this.push(filePathArray);
       }
     }
 
@@ -108,25 +161,26 @@ function getLibrary() {
 
     filenameArr.forEach(function (val) {
       // Ignore podcasts (defined by the keyword and ~5) and Voice Memos
-      if (val[val.length - 3] !== 'podcast'
+      if (val[val.length - 3] !== 'Podcast'
           && val[val.length - 3] !== '~5'
           && val[val.length - 2] !== 'Voice Memos') {
 
         // Map to the artist, album, and track with proper foreign characters
         var artist = decodeURIComponent(val[val.length - 3]);
         var album = decodeURIComponent(val[val.length - 2]);
-        var track = decodeURIComponent(val[val.length - 1]);
+        // Remove song numbers from front of track name
+        var track = decodeURIComponent(val[val.length - 1]).replace(/[\d]\w+\s/, '');
 
         // Create nested artist objects of album objects containing an array of tracks
-        if (library_obj[artist] && library_obj[artist][album]) {
-          library_obj[artist][album] = library_obj[artist][album].concat(track);
-        } else if(library_obj[artist] && !library_obj[artist][album]) {
-          library_obj[artist][album] = new Array;
-          library_obj[artist][album] = library_obj[artist][album].concat(track);
+        if (libraryObj[artist] && libraryObj[artist][album]) {
+          libraryObj[artist][album] = libraryObj[artist][album].concat(track);
+        } else if(libraryObj[artist] && !libraryObj[artist][album]) {
+          libraryObj[artist][album] = new Array;
+          libraryObj[artist][album] = libraryObj[artist][album].concat(track);
         } else {
-          library_obj[artist] = new Object;
-          library_obj[artist][album] = new Array;
-          library_obj[artist][album] = library_obj[artist][album].concat(track);
+          libraryObj[artist] = new Object;
+          libraryObj[artist][album] = new Array;
+          libraryObj[artist][album] = libraryObj[artist][album].concat(track);
         }
       }
     });
@@ -137,40 +191,16 @@ function getLibrary() {
         .pipe(parseItunesLib)
         .pipe(buildUserLib);
 
-  stream.on('finish', function () {
-    console.log('Library', library_obj);
+  var promise = new Promise(function(fulfill, reject) {
+    stream.on('finish', function() {
+      fulfill(libraryObj);
+    });
   });
+  return promise;
 }
 
-//getLibrary();
-
-
-//compare
-var exLib = {
-  Drake: { DrakeAlbum: ['song5', 'song6'] },
-  Bob: {
-    BobAlbum: ['song1', 'song2'],
-    BobAlbum2: ['song3', 'song4']
-  }
-}
-
-//base
-var exDisk = {
-  Drake: {
-    DrakeAlbum: ['song1', 'song2'],
-    DrakeAlbum2: ['song3', 'song4']
-  },
-  Bob: {
-    BobAlbum: ['song1', 'song5'],
-    BobAlbum3: ['song3', 'song4']
-  },
-  Alex: { AlexAlbum: ['alexSong'] }
-}
-
-function buildMissingItems(library, disk) {
+function buildMissingItems(first, second) {
   var missingFromLib = {};
-  var missingFromDisk = {};
-  var diskArtists = Object.keys(disk);
 
   function compare(baseObj, compareObj, path) {
     path = path || [];
@@ -222,9 +252,12 @@ function buildMissingItems(library, disk) {
     var current = '';
 
     for (i = 0; i <= next; i++) {
-      current = current.concat('["' + path[i] + '"]');
+      current += '["' + path[i] + '"]';
     }
 
+    // This will currently break if there are any backslashes
+    // in the path name- escaped characters become unescaped
+    // when they are eval'd
     var currentLocation = 'missingFromLib' + current;
 
     if (next === path.length - 1) {
@@ -243,10 +276,33 @@ function buildMissingItems(library, disk) {
     callback(pathString);
   }
 
-  compare(exDisk, exLib);
-
-  console.log('Missing from Lib', missingFromLib);
+  compare(first, second);
+  return missingFromLib;
 }
 
-buildMissingItems(exLib, exDisk);
+function comparisonManager() {
+  var musicOnDisk = getSongs('../Music');
+  var library = getLibrary();
 
+
+  library.then(function(musicInLib) {
+
+    console.log('Items in Disk:', Object.keys(musicOnDisk).length)
+    console.log('Items in Library:', Object.keys(musicInLib).length)
+
+    fs.writeFile('musicInLib.json', JSON.stringify(musicInLib, null, 2));
+    fs.writeFile('musicOnDisk.json', JSON.stringify(musicOnDisk, null, 2));
+
+    // The second argument is the one that items will be listed as missing from.
+    //var missingItems = JSON.stringify(buildMissingItems(musicInLib, musicOnDisk), null, 2);
+    var missingItems = JSON.stringify(buildMissingItems(musicOnDisk, musicInLib), null, 2);
+
+    console.log('Disk Baseobj - items missing from Library');
+    fs.writeFile('output.json', missingItems, 'utf-8');
+  })
+  .catch(function(err) {
+    console.log(err);
+  });
+}
+
+comparisonManager();
